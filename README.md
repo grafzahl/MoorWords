@@ -2,6 +2,10 @@
 
 Browser-Lesespiel für Grundschulkinder. Kindgerechte Gegenstände schweben mit zufälligen, voneinander unabhängigen Wörtern durch eine illustrierte Wiese. Ein korrekt erkanntes, laut vorgelesenes Wort lässt den Gegenstand in Konfetti platzen.
 
+**Online spielen:** [MoorWords öffnen](https://grafzahl.github.io/MoorWords/)
+
+Die Website wird bei Änderungen an `main` automatisch über GitHub Actions aus `dist/` auf GitHub Pages veröffentlicht. Vor jeder Veröffentlichung laufen die Tests und JavaScript-Syntaxprüfungen.
+
 **Repository:** [grafzahl/MoorWords](https://github.com/grafzahl/MoorWords) · **Version:** 0.3.0.
 
 ## Lokal starten
@@ -54,7 +58,7 @@ Browser: moderner Desktop-Chromium empfohlen als erster Test. Safari/iPadOS nich
 
 `node --test tests/*.test.mjs` prüft Wortgrenzen, Normalisierung, Konfidenzfilter, Punkte, Wortauswahl, Lesepuffer und den Mikrofon-Lebenszyklus mit simulierten Browser-APIs. Die Syntax lässt sich mit `node --check` für jedes Modul in `dist/` prüfen. Wenn npm verfügbar ist, stehen dafür auch `npm test` und `npm run check` bereit. Es werden keine zusätzlichen Pakete benötigt.
 
-Stand der Version 0.3: 32 automatisierte Tests bestanden, Syntaxprüfungen bestanden. Die lokale HTTP-Startseite der Vorversion wurde mit Status 200 geprüft. Die neue Oberfläche ist noch nicht visuell im Browser geprüft. Echter Mikrofoneingang, Modelldownload und Erkennungsqualität der Wortschatzhilfe wurden nicht praktisch verifiziert. Der Quellcode ist im oben verlinkten GitHub-Repository verfügbar. Eine gehostete Spielversion über GitHub Pages ist noch nicht eingerichtet.
+Stand der Version 0.3: 32 automatisierte Tests bestanden, Syntaxprüfungen bestanden. Die lokale HTTP-Startseite der Vorversion wurde mit Status 200 geprüft. Die neue Oberfläche ist noch nicht visuell im Browser geprüft. Echter Mikrofoneingang, Modelldownload und Erkennungsqualität der Wortschatzhilfe wurden nicht praktisch verifiziert. Der Quellcode ist im oben verlinkten GitHub-Repository verfügbar. Die gehostete Spielversion ist unter https://grafzahl.github.io/MoorWords/ verfügbar. Veröffentlichung, Seitenaufruf und Klick-Demomodus einschließlich Punktewertung wurden geprüft; ein echter Mikrofontest steht weiterhin aus.
 
 Manueller Test: Mikrofon erlauben, Ladeabschluss abwarten, sichtbares Wort sprechen, Pause lassen. Ein Treffer zählt einmal. Falsches Wort darf nicht treffen. Pause/Tabwechsel beendet Mikrofonzugriff; Fortsetzen fordert es erneut an. Verweigerte Berechtigung zeigt Hilfe; Demo bleibt verwendbar. Demo-Rekord bleibt unverändert. Kleinen Bildschirm und Tastaturbedienung prüfen. Zusätzlich in Klasse 3 ein sichtbares „Regenbogen“ als „Regen … Bogen“ lesen, erst mit kurzer und dann mit längerer Pause. Die Einstellung „Geduldig – 3 Sekunden“ mit dem Standard vergleichen. Falsche Wörter und Hintergrundgespräche testen, danach Wortschatzhilfe ausschalten und dieselben Versuche wiederholen. Die automatische Testsuite simuliert Text-Ergebnisse; sie ersetzt diesen Audiotest nicht.
 
