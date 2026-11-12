@@ -1,0 +1,17 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {LocalSpeech} from '../dist/speech.mjs';
+function environment(){let stopped=0,closed=0,removed=0,terminated=0;const track={stop(){stopped++;}};const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};const node=()=>({connect(){},disconnect(){}});class Context{sampleRate=48000;resume(){return Promise.resolve();}close(){closed++;return Promise.resolve();}createMediaStreamSource(){return node();}createScriptProcessor(){return node();}createGain(){return {...node(),gain:{value:1}};}}
+class Recognizer{constructor(rate,grammar){assert.equal(rate,48000);this.grammar=grammar;this.listeners={};}setWords(value){assert.equal(value,true);}on(name,cb){this.listeners[name]=cb;}acceptWaveform(){}remove(){removed++;}}
+class Model{constructor(){this.ready=false;this.listeners={};queueMicrotask(()=>{this.ready=true;this.listeners.load?.({result:true});});}on(name,cb){this.listeners[name]=cb;}setLogLevel(){}KaldiRecognizer=Recognizer;terminate(){terminated++;}}
+Object.defineProperty(globalThis,'isSecureContext',{value:true,configurable:true});Object.defineProperty(globalThis,'navigator',{value:{mediaDevices:{getUserMedia:async()=>stream}},configurable:true});globalThis.AudioContext=Context;globalThis.Vosk={Model};return {track,stream,counts:()=>({stopped,closed,removed,terminated})};}
+test('Mikrofonstart, lokale Ergebnisse, Stop und Neustart ohne altes Ergebnis',async()=>{const env=environment();const speech=new LocalSpeech();const heard=[];assert.equal(await speech.start((text)=>heard.push(text),()=>{},()=>{},()=>{}),true);const recognizer=speech.recognizer;recognizer.listeners.result({result:{text:'haus',result:[]}});assert.deepEqual(heard,['haus']);speech.stop();recognizer.listeners.result({result:{text:'maus',result:[]}});assert.deepEqual(heard,['haus']);assert.deepEqual(env.counts(),{stopped:1,closed:1,removed:1,terminated:0});assert.equal(await speech.start(()=>{},()=>{},()=>{},()=>{}),true);speech.dispose();assert.deepEqual(env.counts(),{stopped:2,closed:2,removed:2,terminated:1});});
+test('Verweigerter Mikrofonzugriff schließt AudioContext',async()=>{const env=environment();navigator.mediaDevices.getUserMedia=async()=>{throw Object.assign(new Error('Nein'),{name:'NotAllowedError'});};const speech=new LocalSpeech();await assert.rejects(speech.start(()=>{},()=>{},()=>{},()=>{}),{name:'NotAllowedError'});assert.equal(env.counts().closed,1);assert.equal(speech.stream,null);});
+test('Abbruch während Berechtigungsdialog stoppt später gelieferte Tracks',async()=>{const env=environment();let permission;let requested;const reached=new Promise(resolve=>{requested=resolve;});navigator.mediaDevices.getUserMedia=()=>{requested();return new Promise(resolve=>{permission=resolve;});};const speech=new LocalSpeech();const start=speech.start(()=>{},()=>{},()=>{},()=>{});await reached;speech.stop();permission(env.stream);assert.equal(await start,false);assert.equal(env.counts().stopped,1);assert.equal(speech.recognizer,null);});
+test('Wortschatz wird an Vosk übergeben; Abschalten startet wieder freie Erkennung',async()=>{
+  environment();const speech=new LocalSpeech();
+  await speech.start(()=>{},()=>{},()=>{},()=>{},{words:[{text:'Regenbogen'}]});
+  assert.deepEqual(JSON.parse(speech.recognizer.grammar),['regenbogen','regen','bogen','[unk]']);
+  speech.stop();
+  await speech.start(()=>{},()=>{},()=>{},()=>{},{words:[{text:'Regenbogen'}],vocabularyHelp:false});
+  assert.equal(speech.recognizer.grammar,undefined);speech.dispose();
+});
