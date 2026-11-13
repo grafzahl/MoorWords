@@ -1,6 +1,6 @@
 # Lernziele und Wortauswahl
 
-MoorWords 0.2 enthält vier getrennte Wortpools mit jeweils 64 Wörtern. Die Klasse wird frei gewählt; entscheidend ist der individuelle Lesestand. Die Zuordnung ist eine eigenständige didaktische Arbeitshypothese und keine amtliche, für alle deutschen Schulen verbindliche Klassenwortliste. Eine fachliche Erprobung durch Grundschullehrkräfte steht aus.
+Der aktuelle Entwicklungsstand enthält vier getrennte Wortpools mit jeweils 128 Wörtern. Die Klasse wird frei gewählt; entscheidend ist der individuelle Lesestand. Die Zuordnung ist eine eigenständige didaktische Arbeitshypothese und keine amtliche, für alle deutschen Schulen verbindliche Klassenwortliste. Eine fachliche Erprobung durch Grundschullehrkräfte steht aus.
 
 ## Fachlicher Bezug
 
@@ -21,7 +21,7 @@ Ergänzend dient die offizielle ZSL-Erläuterung zum Grundwortschatz Baden-Würt
 
 Die Klassenpools sind getrennt. In Klasse 4 erscheinen keine zufällig beigemischten Wörter aus Klasse 1. Eine Wiederholung erfolgt durch bewusste Wahl einer anderen Klasse. Innerhalb jeder Klasse gibt es unterschiedlich hohe Lesehürden. Wortlänge allein entscheidet nicht über den Klassenbezug.
 
-Jedes Wort hat in `dist/words.mjs` die Felder `text`, `grade`, `tier` und `focus`. `grade` bestimmt den Wortpool. `tier` ist eine redaktionelle Einschätzung der Lesehürde (1–4), keine standardisierte Messung; sie steuert Farbe, Schriftgröße und Punkte. `focus` dokumentiert den Schwerpunkt. Das Spiel vergibt `5 + 2 × Buchstabenanzahl + 10 × (tier − 1)` Punkte.
+Jedes Wort hat in `dist/words.mjs` die Felder `text`, `grade`, `tier` und `focus`. `grade` bestimmt den Wortpool. `tier` ist eine redaktionelle Einschätzung der Lesehürde (1–4), keine standardisierte Messung; sie steuert Farbe, Schriftgröße und Punkte. `focus` dokumentiert den Schwerpunkt. Das Spiel vergibt `round(100 + Schwierigkeit(Wort) − mittlere Schwierigkeit(Klasse))` Punkte; Schwierigkeit = `2 × Buchstabenanzahl + 10 × (tier − 1)`. Dadurch liegt jede Klasse im Mittel bei rund 100 Punkten pro Wort. Das macht Spielwerte ähnlicher, ist aber keine pädagogische Normierung der Leseleistung.
 
 Die Auswahl deckt Übungsbeispiele ab, nicht den vollständigen Grundwortschatz. Einzelne schwierige Wörter der Klasse 1 setzen bereits erarbeitete Buchstaben voraus. Für den allerersten Lesestart wäre zusätzlich ein Filter nach bekannten Buchstaben sinnvoll.
 

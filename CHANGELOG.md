@@ -1,5 +1,15 @@
 # Änderungen
 
+## 0.4.0 · 13.11.2026
+
+- 128 Wörter pro Klassenstufe (512 insgesamt), weiterhin vier Lernschwerpunkte je Klasse. Gemischter Rundenvorrat ohne Wiederholung, auch bei verpassten Wörtern; neue Runde mischt neu.
+- Klassenbezogene Punktebaseline von durchschnittlich rund 100 Punkten pro Wort. Neue Rekordablage v4, nach Bewegungseinstellung getrennt; alte Rekorde bleiben erhalten.
+- Mobile Spielansicht mit voller verfügbarer Höhe, Displayrand-Abständen, großen Bedienelementen, zwei Zielen im Hochformat und angepasstem Querformat. Lange Wörter werden bei Bedarf verkleinert.
+- Zufällige Flugrichtungen und Richtungswechsel, Begrenzung am Spielfeldrand, Ablaufzeit nach Lesehürde und Wortlänge samt Restzeitbalken. Ablauf gilt auch im Übungsmodus; Pausieren hält Bewegung und Zeit an.
+- Bleibt eine vorläufige Spracherkennung für die eingestellte Wartezeit unverändert, fordert die App jetzt ein endgültiges Vosk-Ergebnis an. Dadurch wartet die Trefferwertung nicht unbegrenzt auf den automatischen Abschluss.
+- Konfidenzprüfung und exakte Wortzuordnung bleiben erhalten; vorläufiger Text allein gibt weiterhin keine Punkte. Pause und Neustart löschen ausstehende Abschlussanforderungen.
+- Fünf zusätzliche Regressionstests für verzögerte Ergebnisse, wechselnde Hypothesen, normale Abschlüsse und Stop/Neustart; zusammen mit den Spieltests insgesamt 42 Tests bestanden. Android-/iOS-Audiotest steht noch aus.
+
 ## 0.3.0
 
 - Lokale Wortschatzhilfe für die gewählte Klasse, bekannte Wortbestandteile und unbekannte Äußerungen; für Vergleichstests abschaltbar.

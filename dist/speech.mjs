@@ -1,11 +1,11 @@
-import {buildVocabulary} from './reading.mjs';
+import {buildVocabulary,DEFAULT_PAUSE_MS} from './reading.mjs';
 const MODEL_URL='https://ccoreilly.github.io/vosk-browser/models/vosk-model-small-de-0.15.tar.gz';
 const SCRIPT_URL='https://cdn.jsdelivr.net/npm/vosk-browser@0.0.8/dist/vosk.js';
 let scriptPromise;
 function loadScript(){if(globalThis.Vosk)return Promise.resolve();if(scriptPromise)return scriptPromise;scriptPromise=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src=SCRIPT_URL;script.onload=resolve;script.onerror=()=>{script.remove();scriptPromise=null;reject(new Error('Die Spracherkennung konnte nicht geladen werden. Prüfe die Internetverbindung.'));};document.head.append(script);});return scriptPromise;}
 export class LocalSpeech{
   constructor(){this.model=null;this.stream=null;this.context=null;this.recognizer=null;this.generation=0;}
-  async start(onResult,onPartial,onStatus,onFailure,{words=[],vocabularyHelp=true}={}){
+  async start(onResult,onPartial,onStatus,onFailure,{words=[],vocabularyHelp=true,pauseMs=DEFAULT_PAUSE_MS}={}){
     const generation=++this.generation;
     if(!isSecureContext||!navigator.mediaDevices?.getUserMedia)throw new Error('Das Mikrofon benötigt HTTPS oder localhost. Öffne die App über die bereitgestellte Adresse.');
     try{
@@ -26,8 +26,30 @@ export class LocalSpeech{
       const vocabulary=vocabularyHelp?buildVocabulary(words):[];
       const grammar=vocabulary.length?JSON.stringify(vocabulary):undefined;
       const recognizer=new this.model.KaldiRecognizer(this.context.sampleRate,grammar);this.recognizer=recognizer;recognizer.setWords(true);
-      recognizer.on('result',m=>{if(generation===this.generation)onResult(m.result.text,m.result.result||[]);});
-      recognizer.on('partialresult',m=>{if(generation===this.generation)onPartial(m.result.partial);});
+      let partialText='',finishing=false;
+      const clearPartial=()=>{clearTimeout(this.partialTimer);this.partialTimer=null;partialText='';};
+      recognizer.on('result',m=>{
+        if(generation!==this.generation)return;
+        clearPartial();finishing=false;
+        onResult(m.result.text,m.result.result||[]);
+      });
+      recognizer.on('partialresult',m=>{
+        if(generation!==this.generation||finishing)return;
+        const text=m.result.partial;
+        // Unchanged hypotheses must not postpone finalization forever.
+        // Request a real final result with confidence; never score partial text.
+        if(text!==partialText){
+          clearPartial();partialText=text;
+          if(text)this.partialTimer=setTimeout(()=>{
+            this.partialTimer=null;
+            if(generation!==this.generation)return;
+            finishing=true;
+            try{recognizer.retrieveFinalResult();}
+            catch{onFailure('Die lokale Spracherkennung wurde unterbrochen. Bitte starte erneut.');}
+          },[1200,2000,3000].includes(pauseMs)?pauseMs:DEFAULT_PAUSE_MS);
+        }
+        onPartial(text);
+      });
       recognizer.on('error',()=>{if(generation===this.generation)onFailure('Die lokale Spracherkennung wurde unterbrochen. Bitte starte erneut.');});
       this.source=this.context.createMediaStreamSource(stream);
       // Vosk's documented AudioBuffer interface; a silent output keeps processing active.
@@ -38,6 +60,6 @@ export class LocalSpeech{
       return true;
     }catch(error){if(generation!==this.generation)return false;this.stop();throw error;}
   }
-  stop(){this.generation++;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;this.source?.disconnect();this.processor?.disconnect();this.mute?.disconnect();if(this.processor)this.processor.onaudioprocess=null;this.recognizer?.remove();this.recognizer=null;if(this.context)this.context.close().catch(()=>{});this.context=null;if(this.cancelModel){this.cancelModel();this.model?.terminate();this.model=null;}else if(this.model&&!this.model.ready){this.model.terminate();this.model=null;}}
+  stop(){this.generation++;clearTimeout(this.partialTimer);this.partialTimer=null;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;this.source?.disconnect();this.processor?.disconnect();this.mute?.disconnect();if(this.processor)this.processor.onaudioprocess=null;this.recognizer?.remove();this.recognizer=null;if(this.context)this.context.close().catch(()=>{});this.context=null;if(this.cancelModel){this.cancelModel();this.model?.terminate();this.model=null;}else if(this.model&&!this.model.ready){this.model.terminate();this.model=null;}}
   dispose(){this.stop();this.model?.terminate();this.model=null;}
 }

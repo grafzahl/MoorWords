@@ -1,5 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {LocalSpeech} from '../dist/speech.mjs';
+import {ReadingAttempt} from '../dist/reading.mjs';
 function environment(){let stopped=0,closed=0,removed=0,terminated=0;const track={stop(){stopped++;}};const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};const node=()=>({connect(){},disconnect(){}});class Context{sampleRate=48000;resume(){return Promise.resolve();}close(){closed++;return Promise.resolve();}createMediaStreamSource(){return node();}createScriptProcessor(){return node();}createGain(){return {...node(),gain:{value:1}};}}
 class Recognizer{constructor(rate,grammar){assert.equal(rate,48000);this.grammar=grammar;this.listeners={};}setWords(value){assert.equal(value,true);}on(name,cb){this.listeners[name]=cb;}acceptWaveform(){}remove(){removed++;}}
 class Model{constructor(){this.ready=false;this.listeners={};queueMicrotask(()=>{this.ready=true;this.listeners.load?.({result:true});});}on(name,cb){this.listeners[name]=cb;}setLogLevel(){}KaldiRecognizer=Recognizer;terminate(){terminated++;}}
@@ -14,4 +15,68 @@ test('Wortschatz wird an Vosk übergeben; Abschalten startet wieder freie Erkenn
   speech.stop();
   await speech.start(()=>{},()=>{},()=>{},()=>{},{words:[{text:'Regenbogen'}],vocabularyHelp:false});
   assert.equal(speech.recognizer.grammar,undefined);speech.dispose();
+});
+
+test('Unveränderte Teilhypothese fordert endgültiges Ergebnis an und wertet nur dieses',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();
+  const speech=new LocalSpeech(),heard=[];
+  await speech.start((text,details)=>heard.push({text,details}),()=>{},()=>{},()=>{});
+  const r=speech.recognizer;let flushes=0;r.retrieveFinalResult=()=>{flushes++;};
+  r.listeners.partialresult({result:{partial:'haus'}});
+  t.mock.timers.tick(1500);r.listeners.partialresult({result:{partial:'haus'}});
+  t.mock.timers.tick(500);assert.equal(flushes,1);assert.deepEqual(heard,[]);
+  r.listeners.partialresult({result:{partial:'haus'}});
+  t.mock.timers.tick(6000);assert.equal(flushes,1);
+  const details=[{word:'haus',conf:.9}];
+  r.listeners.result({result:{text:'haus',result:details}});
+  assert.deepEqual(heard,[{text:'haus',details}]);
+  r.listeners.partialresult({result:{partial:'maus'}});
+  t.mock.timers.tick(2000);assert.equal(flushes,2);speech.dispose();
+});
+
+test('Geänderte Hypothesen und geduldige Einstellung lassen Zeit zum Weiterlesen',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();const speech=new LocalSpeech();
+  await speech.start(()=>{},()=>{},()=>{},()=>{},{pauseMs:3000});
+  const r=speech.recognizer;let flushes=0;r.retrieveFinalResult=()=>{flushes++;};
+  r.listeners.partialresult({result:{partial:'regen'}});t.mock.timers.tick(2500);
+  r.listeners.partialresult({result:{partial:'regen bogen'}});t.mock.timers.tick(2999);
+  assert.equal(flushes,0);t.mock.timers.tick(1);assert.equal(flushes,1);speech.dispose();
+});
+
+test('Natürliche Endergebnisse und leere Hypothesen löschen den ausstehenden Abschluss',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();const speech=new LocalSpeech();
+  await speech.start(()=>{},()=>{},()=>{},()=>{});
+  const r=speech.recognizer;let flushes=0;r.retrieveFinalResult=()=>{flushes++;};
+  r.listeners.partialresult({result:{partial:'haus'}});t.mock.timers.tick(1000);
+  r.listeners.result({result:{text:'haus'}});t.mock.timers.tick(2000);
+  r.listeners.partialresult({result:{partial:'maus'}});t.mock.timers.tick(1000);
+  r.listeners.partialresult({result:{partial:''}});t.mock.timers.tick(2000);
+  assert.equal(flushes,0);speech.dispose();
+});
+
+test('Stop und Neustart verwerfen ausstehende Abschlüsse und alte Teilhypothesen',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();const speech=new LocalSpeech();
+  await speech.start(()=>{},()=>{},()=>{},()=>{});
+  const old=speech.recognizer;let flushes=0;old.retrieveFinalResult=()=>{flushes++;};
+  old.listeners.partialresult({result:{partial:'haus'}});speech.stop();
+  await speech.start(()=>{},()=>{},()=>{},()=>{});
+  old.listeners.partialresult({result:{partial:'maus'}});t.mock.timers.tick(5000);
+  assert.equal(flushes,0);speech.dispose();
+});
+
+test('Angeforderte Endergebnisse treffen nur sichere sichtbare Wörter und zählen einmal',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();
+  const speech=new LocalSpeech(),attempt=new ReadingAttempt();
+  const target={id:1,word:{text:'Haus'},hit:false};let hits=0,now=0,confidence=.4;
+  await speech.start((text,details)=>{
+    for(const hit of attempt.final(text,details,[target],now).hits){hit.hit=true;hits++;}
+  },text=>attempt.partial(text,[target],now),()=>{},()=>{});
+  const r=speech.recognizer;
+  r.retrieveFinalResult=()=>r.listeners.result({result:{text:'haus',result:[{word:'haus',conf:confidence}]}});
+  for(const conf of [.4,.9,.9]){
+    confidence=conf;r.listeners.partialresult({result:{partial:'haus'}});
+    now+=2000;attempt.expire(now);t.mock.timers.tick(2000);
+    assert.equal(hits,conf===.4?0:1);
+  }
+  speech.dispose();
 });
