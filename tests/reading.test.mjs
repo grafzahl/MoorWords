@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ReadingAttempt,buildVocabulary} from '../dist/reading.mjs';
+import {ReadingAttempt,buildVocabulary,StablePartialMatcher} from '../dist/reading.mjs';
 import {poolFor} from '../dist/engine.mjs';
 
 const target=(text,id=1)=>({id,word:{text},hit:false,preview:false});
@@ -111,4 +111,39 @@ test('Klassenwortschatz enthält ganze Wörter, passende Bestandteile und Unbeka
   assert.ok(vocabulary.includes('fußball'));assert.ok(vocabulary.includes('fuß'));
   assert.ok(vocabulary.includes('[unk]'));assert.equal(vocabulary.includes('mama'),false);
   assert.equal(new Set(vocabulary).size,vocabulary.length);assert.deepEqual(buildVocabulary([]),[]);
+});
+
+// Stable interim hypotheses are a separate, explicit gameplay acceptance path.
+test('Vollständiges Wort trifft nach wiederholter Bestätigung ohne Endergebnis',()=>{
+  const m=new StablePartialMatcher(),t=target('Haus');
+  assert.deepEqual(m.update('haus',[t],0),[]);
+  assert.deepEqual(m.update('haus',[t],799),[]);
+  assert.deepEqual(m.update('haus',[t],800),[t]);
+  assert.deepEqual(m.update('haus',[t],1800),[]);
+});
+test('Flüchtige Korrekturen, Teilwörter und unbekannte Wörter treffen nicht',()=>{
+  const m=new StablePartialMatcher(),t=target('Haus');
+  m.update('haus',[t],0);assert.deepEqual(m.update('maus',[t],400),[]);
+  assert.deepEqual(m.update('maus',[t],1400),[]);
+  for(const text of ['ha','haustür','[unk]','regen bogen']){
+    m.reset();m.update(text,[t],0);assert.deepEqual(m.update(text,[t],1000),[]);
+  }
+});
+test('Wechselnder Nachsatz blockiert kein bereits stabiles ganzes Wort',()=>{
+  const m=new StablePartialMatcher(),t=target('Haus');
+  m.update('haus und',[t],0);
+  assert.deepEqual(m.update('haus und maus',[t],900),[t]);
+});
+test('Alte Hypothesen treffen weder später erschienene noch verschwundene Ziele',()=>{
+  const m=new StablePartialMatcher(),t=target('Haus');
+  m.update('haus',[],0);assert.deepEqual(m.update('haus',[t],900),[]);
+  m.reset();m.update('haus',[t],0);assert.deepEqual(m.update('haus',[],900),[]);
+  m.reset();m.update('haus',[{...t,preview:true}],0);assert.deepEqual(m.update('haus',[t],900),[]);
+});
+test('Reset oder leere Hypothese erfordert erneut eine stabile Bestätigung',()=>{
+  const m=new StablePartialMatcher(),t=target('Haus');
+  for(const reset of [()=>m.reset(),()=>m.update('',[t],500)]){
+    m.update('haus',[t],0);reset();assert.deepEqual(m.update('haus',[t],1000),[]);
+    assert.deepEqual(m.update('haus',[t],1800),[t]);m.reset();
+  }
 });

@@ -1,4 +1,4 @@
-import {WORDS,GRADES} from './words.mjs';
+import {WORDS,GRADES} from './words.mjs?v=0.4.1';
 export {WORDS,GRADES};
 export function normalize(text){return String(text).normalize('NFC').toLocaleLowerCase('de-DE').replace(/ß/g,'ss').replace(/[^a-zäöü\s]/g,' ').replace(/\s+/g,' ').trim();}
 const difficulty=word=>[...word.text].length*2+(word.tier-1)*10;

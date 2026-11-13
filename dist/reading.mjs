@@ -1,8 +1,36 @@
-import {normalize} from './engine.mjs';
+import {normalize} from './engine.mjs?v=0.4.1';
 
 export const DEFAULT_PAUSE_MS = 2000;
 const MAX_ATTEMPT_MS = 15000;
 const MIN_CONFIDENCE = 0.6;
+export const STABLE_WORD_MS = 800;
+
+// Track each token across distinct recognition callbacks, not animation frames.
+// A changing suffix must not keep an already stable word from scoring.
+export class StablePartialMatcher{
+  constructor(){this.reset();}
+  reset(){this.tokens=[];this.used=new Set();}
+  update(text,targets,now){
+    const incoming=tokensFrom(text,[]);
+    if(!incoming.length){this.reset();return [];}
+    this.tokens=incoming.map((token,index)=>{
+      const previous=this.tokens[index];
+      if(previous?.key===token.key){previous.observations++;return previous;}
+      return {key:token.key,since:now,observations:1,
+        allowed:new Set(targets.filter(t=>!t.hit&&!t.preview).map(t=>t.id))};
+    });
+    const hits=[];
+    for(const token of this.tokens){
+      if(token.key==='[unk]'||token.observations<2||now-token.since<STABLE_WORD_MS)continue;
+      for(const target of targets){
+        if(target.hit||target.preview||this.used.has(target.id)||!token.allowed.has(target.id))continue;
+        if(normalize(target.word.text)!==token.key)continue;
+        this.used.add(target.id);hits.push(target);
+      }
+    }
+    return hits;
+  }
+}
 
 // Real words/morphemes that may occur as separate Vosk results in compounds.
 // This is vocabulary help, not a list of accepted pronunciation substitutions.

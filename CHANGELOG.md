@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.4.1 · 13.11.2026
+
+- Ganze, exakt passende Wörter können nach mindestens 800 ms und zwei bestätigenden Erkennungsereignissen bereits aus Zwischenständen treffen. Wechselnde Nachsätze blockieren stabile Wörter nicht; keine Teilworttreffer oder doppelte Punkte aus späteren Endergebnissen.
+- Während des angeforderten Abschlusses werden weitere Zwischenstände weitergegeben. Nach fünf Sekunden ohne Abschlussantwort pausiert das Spiel mit einer Neustartmöglichkeit.
+- Eigene Rekordschlüssel für die geänderte Trefferregel; sichtbare Versionsnummer und versionierte Modul-Adressen gegen alten Browser-Cache.
+- 50 automatisierte Tests bestanden. Reale iOS-/Android-Mikrofontests stehen weiterhin aus.
+
+
 ## 0.4.0 · 13.11.2026
 
 - 128 Wörter pro Klassenstufe (512 insgesamt), weiterhin vier Lernschwerpunkte je Klasse. Gemischter Rundenvorrat ohne Wiederholung, auch bei verpassten Wörtern; neue Runde mischt neu.

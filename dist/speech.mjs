@@ -1,4 +1,4 @@
-import {buildVocabulary,DEFAULT_PAUSE_MS} from './reading.mjs';
+import {buildVocabulary,DEFAULT_PAUSE_MS} from './reading.mjs?v=0.4.1';
 const MODEL_URL='https://ccoreilly.github.io/vosk-browser/models/vosk-model-small-de-0.15.tar.gz';
 const SCRIPT_URL='https://cdn.jsdelivr.net/npm/vosk-browser@0.0.8/dist/vosk.js';
 let scriptPromise;
@@ -30,11 +30,15 @@ export class LocalSpeech{
       const clearPartial=()=>{clearTimeout(this.partialTimer);this.partialTimer=null;partialText='';};
       recognizer.on('result',m=>{
         if(generation!==this.generation)return;
+        clearTimeout(this.finalTimer);this.finalTimer=null;
         clearPartial();finishing=false;
         onResult(m.result.text,m.result.result||[]);
       });
       recognizer.on('partialresult',m=>{
-        if(generation!==this.generation||finishing)return;
+        if(generation!==this.generation)return;
+        // Slow workers may still deliver queued hypotheses while finalizing.
+        // Keep the game's stable-word matcher supplied without another flush.
+        if(finishing){onPartial(m.result.partial);return;}
         const text=m.result.partial;
         // Unchanged hypotheses must not postpone finalization forever.
         // Request a real final result with confidence; never score partial text.
@@ -44,6 +48,10 @@ export class LocalSpeech{
             this.partialTimer=null;
             if(generation!==this.generation)return;
             finishing=true;
+            this.finalTimer=setTimeout(()=>{
+              this.finalTimer=null;
+              if(generation===this.generation&&finishing)onFailure('Die Spracherkennung antwortet nicht mehr. Tippe auf Weiterlesen, um sie neu zu starten.');
+            },5000);
             try{recognizer.retrieveFinalResult();}
             catch{onFailure('Die lokale Spracherkennung wurde unterbrochen. Bitte starte erneut.');}
           },[1200,2000,3000].includes(pauseMs)?pauseMs:DEFAULT_PAUSE_MS);
@@ -60,6 +68,6 @@ export class LocalSpeech{
       return true;
     }catch(error){if(generation!==this.generation)return false;this.stop();throw error;}
   }
-  stop(){this.generation++;clearTimeout(this.partialTimer);this.partialTimer=null;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;this.source?.disconnect();this.processor?.disconnect();this.mute?.disconnect();if(this.processor)this.processor.onaudioprocess=null;this.recognizer?.remove();this.recognizer=null;if(this.context)this.context.close().catch(()=>{});this.context=null;if(this.cancelModel){this.cancelModel();this.model?.terminate();this.model=null;}else if(this.model&&!this.model.ready){this.model.terminate();this.model=null;}}
+  stop(){this.generation++;clearTimeout(this.finalTimer);this.finalTimer=null;clearTimeout(this.partialTimer);this.partialTimer=null;this.stream?.getTracks().forEach(t=>t.stop());this.stream=null;this.source?.disconnect();this.processor?.disconnect();this.mute?.disconnect();if(this.processor)this.processor.onaudioprocess=null;this.recognizer?.remove();this.recognizer=null;if(this.context)this.context.close().catch(()=>{});this.context=null;if(this.cancelModel){this.cancelModel();this.model?.terminate();this.model=null;}else if(this.model&&!this.model.ready){this.model.terminate();this.model=null;}}
   dispose(){this.stop();this.model?.terminate();this.model=null;}
 }

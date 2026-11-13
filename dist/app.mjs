@@ -1,9 +1,10 @@
-import {WORDS,GRADES,poolFor,pointsFor,WordDeck,lifetimeFor,advanceFlight} from './engine.mjs';
-import {LocalSpeech} from './speech.mjs';
-import {ReadingAttempt} from './reading.mjs';
+import {WORDS,GRADES,poolFor,pointsFor,WordDeck,lifetimeFor,advanceFlight} from './engine.mjs?v=0.4.1';
+import {LocalSpeech} from './speech.mjs?v=0.4.1';
+import {ReadingAttempt,StablePartialMatcher} from './reading.mjs?v=0.4.1';
 const $=s=>document.querySelector(s);
 const speech=new LocalSpeech();
 const attempt=new ReadingAttempt();
+const partialMatcher=new StablePartialMatcher();
 let vocabularyHelp=true;
 const art=['🎈','🪁','🍎','⭐','🫧','🚀','🍓','🦋','🌻','🎁'];
 let level=1,mode='timed',duration=90,reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -11,7 +12,7 @@ let state='idle',demo=false,score=0,remaining=90,targets=[],readWords=[],nextId=
 let deck=new WordDeck(level);
 const targetLimit=()=>$('#field').clientWidth<950?2:4;
 let best={};try{best=JSON.parse(localStorage.getItem('moorwords-best-reading-v4')||'{}');if(!best||typeof best!=='object')best={};}catch{}
-const bestKey=()=>`${level}-${mode}-${duration}-${attempt.pauseMs}-${vocabularyHelp?1:0}-${reduced?1:0}`;
+const bestKey=()=>`${level}-${mode}-${duration}-${attempt.pauseMs}-${vocabularyHelp?1:0}-${reduced?1:0}-stable`;
 function showBest(){$('#best').replaceChildren(document.createTextNode(`${best[bestKey()]||0} `),Object.assign(document.createElement('em'),{textContent:'Punkte'}));}
 function status(main,sub){$('#status').textContent=main;if(sub!==undefined)$('#transcript').textContent=sub;}
 function updateStats(){const seconds=Math.ceil(remaining);$('#score').textContent=score;$('#timer').textContent=mode==='practice'?'∞':`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;}
@@ -47,14 +48,20 @@ function spawn(){
 function remove(t){targets=targets.filter(x=>x!==t);t.el.remove();}
 function hit(t){if(state!=='playing'||t.hit||!targets.includes(t))return;t.hit=true;const pts=pointsFor(t.word);score+=pts;readWords.push(t.word.text);const x=t.el.style.left,y=t.el.style.top;const burst=document.createElement('span');burst.className='burst';burst.textContent=`✦ +${pts}`;burst.style.left=x;burst.style.top=y;$('#field').append(burst);setTimeout(()=>burst.remove(),1000);if(!reduced)for(let i=0;i<9;i++){const dot=document.createElement('i');dot.className='confetti';dot.style.cssText=`left:${x};top:${y};background:${['#e5b547','#75a771','#e69b86','#87bfce'][i%4]};--dx:${Math.cos(i*2.4)*65}px;--dy:${Math.sin(i*2.4)*65}px`;$('#field').append(dot);setTimeout(()=>dot.remove(),900);}remove(t);updateStats();status(demo?'Plopp! So funktioniert das Spiel.':'Prima gelesen! Such dir das nächste Wort.',`„${t.word.text}“ · +${pts} Punkte${demo?' · Demo':''}`);}
 function onSpeech(text,details){
-  if(state!=='playing'||demo||!text)return;
+  if(state!=='playing'||demo)return;
+  partialMatcher.reset();
+  if(!text)return;
   const result=attempt.final(text,details,targets,performance.now());
   result.hits.forEach(hit);
   if(result.pending&&!result.hits.length)status('Ich höre weiter … Lass dir Zeit.', 'Gehört: „'+text+'“ · Du kannst das Wort in Ruhe zu Ende lesen.');
 }
 function onPartial(text){
-  if(state!=='playing'||demo||!text)return;
-  if(attempt.partial(text,targets,performance.now()))status('Ich höre weiter … Lass dir Zeit.', 'Ich höre: „'+text+'“ …');
+  if(state!=='playing'||demo)return;
+  const now=performance.now();
+  const hits=partialMatcher.update(text,targets,now);
+  hits.forEach(hit);
+  if(hits.length||!text)return;
+  if(attempt.partial(text,targets,now))status('Ich höre weiter … Lass dir Zeit.', 'Ich höre: „'+text+'“ …');
 }
 function checkReadingPause(now){
   if(demo)return;
@@ -62,8 +69,8 @@ function checkReadingPause(now){
   if(expired&&!expired.hadHit)status('Das habe ich noch nicht sicher verstanden.', 'Lies ein sichtbares Wort noch einmal in Ruhe vor.');
 }
 function errorText(error){if(error.name==='NotAllowedError')return 'Der Mikrofonzugriff ist nicht erlaubt. Gib ihn in den Website-Einstellungen deines Browsers frei und versuche es erneut.';if(error.name==='NotFoundError')return 'Kein Mikrofon gefunden. Verbinde ein Mikrofon und versuche es erneut.';if(error.name==='NotReadableError')return 'Das Mikrofon ist gerade nicht verfügbar. Prüfe, ob eine andere App es verwendet.';return error.message||'Die Spracherkennung konnte nicht gestartet werden.';}
-function fail(message){session++;speech.stop();attempt.reset();state='paused';$('#pause-panel').hidden=false;$('#pause-panel h2').textContent='Das Mikrofon braucht Hilfe.';$('#pause-panel p').textContent=message;$('#pause').disabled=true;$('#resume').disabled=false;$('#loading').hidden=true;document.body.classList.remove('listening');status('Spiel pausiert. Dein Punktestand bleibt erhalten.',message);}
-async function start(isDemo=false,resume=false){if(state==='loading'||state==='playing')return;const ticket=++session;attempt.reset();demo=isDemo;state='loading';locks(true);$('#error').hidden=true;$('#start').disabled=true;$('#demo').disabled=true;$('#resume').disabled=true;$('#loading').hidden=isDemo;$('#welcome').hidden=resume;$('#results').hidden=true;$('#pause-panel').hidden=true;$('#pause').disabled=true;
+function fail(message){session++;speech.stop();attempt.reset();partialMatcher.reset();state='paused';$('#pause-panel').hidden=false;$('#pause-panel h2').textContent='Das Mikrofon braucht Hilfe.';$('#pause-panel p').textContent=message;$('#pause').disabled=true;$('#resume').disabled=false;$('#loading').hidden=true;document.body.classList.remove('listening');status('Spiel pausiert. Dein Punktestand bleibt erhalten.',message);}
+async function start(isDemo=false,resume=false){if(state==='loading'||state==='playing')return;const ticket=++session;attempt.reset();partialMatcher.reset();demo=isDemo;state='loading';locks(true);$('#error').hidden=true;$('#start').disabled=true;$('#demo').disabled=true;$('#resume').disabled=true;$('#loading').hidden=isDemo;$('#welcome').hidden=resume;$('#results').hidden=true;$('#pause-panel').hidden=true;$('#pause').disabled=true;
   try{if(!demo){const ready=await speech.start(onSpeech,onPartial,message=>{if(ticket===session){status(message);$('#load-note').textContent=message;}},fail,{words:poolFor(level),vocabularyHelp,pauseMs:attempt.pauseMs});if(ticket!==session||!ready)return;}
     if(ticket!==session)return;
     if(!resume){score=0;remaining=mode==='practice'?0:duration;readWords=[];deck=new WordDeck(level);clearTargets();spawnClock=0;}
@@ -71,9 +78,9 @@ async function start(isDemo=false,resume=false){if(state==='loading'||state==='p
   }catch(error){if(ticket!==session)return;if(resume){fail(errorText(error));}else{state='idle';locks(false);$('#welcome').hidden=false;$('#error').textContent=errorText(error);$('#error').hidden=false;status('Das Mikrofon ist noch nicht bereit.',errorText(error));}}
   finally{if(ticket===session){$('#start').disabled=false;$('#demo').disabled=false;$('#resume').disabled=false;$('#loading').hidden=true;}}
 }
-function pause(){if(state!=='playing')return;state='paused';speech.stop();attempt.reset();$('#pause-panel h2').textContent='Eine kleine Lesepause.';$('#pause-panel p').textContent='Atme durch. Deine Wörter warten auf dich.';$('#pause-panel').hidden=false;$('#pause').disabled=true;document.body.classList.remove('listening');status('Pause · Mikrofon ausgeschaltet.','Deine Wörter und Punkte warten auf dich.');}
-function finish(){if(!['playing','paused'].includes(state))return;state='results';document.body.classList.remove('round-active');speech.stop();attempt.reset();session++;$('#pause-panel').hidden=true;$('#results').hidden=false;$('#pause').disabled=true;$('#end').hidden=true;document.body.classList.remove('listening');$('#result-label').textContent=demo?'DEMO BEENDET':'GUT GELESEN!';$('#result-title').textContent=readWords.length?'Das hast du toll gemacht!':'Jeder Anfang zählt!';$('#result-text').textContent=`${score} Punkte · ${readWords.length} ${demo?'angeklickte':'erkannte'} Wörter${demo?' · Dein Rekord bleibt unverändert.':''}`;$('#result-words').replaceChildren(...[...new Set(readWords)].map(text=>Object.assign(document.createElement('span'),{textContent:text})));if(!demo&&score>(Number(best[bestKey()])||0)){best[bestKey()]=score;try{localStorage.setItem('moorwords-best-reading-v4',JSON.stringify(best));}catch{}showBest();}status('Runde beendet · Mikrofon ausgeschaltet.','Lust auf noch ein kleines Leseabenteuer?');}
-function home(){session++;speech.stop();attempt.reset();state='idle';document.body.classList.remove('round-active');locks(false);$('#welcome').hidden=false;$('#results').hidden=true;$('#pause-panel').hidden=true;$('#demo-badge').hidden=true;$('#end').hidden=true;$('#pause').disabled=true;$('#loading').hidden=true;$('#start').disabled=false;$('#demo').disabled=false;$('#resume').disabled=false;$('#error').hidden=true;$('#load-note').textContent='Beim ersten Start: deutsches Sprachmodell laden (ca. 45 MB).';document.body.classList.remove('listening','demo-active');score=0;remaining=duration;updateStats();preview();status('Dein nächstes Leseabenteuer wartet.','Mikrofon einschalten, ein Wort aussuchen und laut vorlesen.');}
+function pause(){if(state!=='playing')return;state='paused';speech.stop();attempt.reset();partialMatcher.reset();$('#pause-panel h2').textContent='Eine kleine Lesepause.';$('#pause-panel p').textContent='Atme durch. Deine Wörter warten auf dich.';$('#pause-panel').hidden=false;$('#pause').disabled=true;document.body.classList.remove('listening');status('Pause · Mikrofon ausgeschaltet.','Deine Wörter und Punkte warten auf dich.');}
+function finish(){if(!['playing','paused'].includes(state))return;state='results';document.body.classList.remove('round-active');speech.stop();attempt.reset();partialMatcher.reset();session++;$('#pause-panel').hidden=true;$('#results').hidden=false;$('#pause').disabled=true;$('#end').hidden=true;document.body.classList.remove('listening');$('#result-label').textContent=demo?'DEMO BEENDET':'GUT GELESEN!';$('#result-title').textContent=readWords.length?'Das hast du toll gemacht!':'Jeder Anfang zählt!';$('#result-text').textContent=`${score} Punkte · ${readWords.length} ${demo?'angeklickte':'erkannte'} Wörter${demo?' · Dein Rekord bleibt unverändert.':''}`;$('#result-words').replaceChildren(...[...new Set(readWords)].map(text=>Object.assign(document.createElement('span'),{textContent:text})));if(!demo&&score>(Number(best[bestKey()])||0)){best[bestKey()]=score;try{localStorage.setItem('moorwords-best-reading-v4',JSON.stringify(best));}catch{}showBest();}status('Runde beendet · Mikrofon ausgeschaltet.','Lust auf noch ein kleines Leseabenteuer?');}
+function home(){session++;speech.stop();attempt.reset();partialMatcher.reset();state='idle';document.body.classList.remove('round-active');locks(false);$('#welcome').hidden=false;$('#results').hidden=true;$('#pause-panel').hidden=true;$('#demo-badge').hidden=true;$('#end').hidden=true;$('#pause').disabled=true;$('#loading').hidden=true;$('#start').disabled=false;$('#demo').disabled=false;$('#resume').disabled=false;$('#error').hidden=true;$('#load-note').textContent='Beim ersten Start: deutsches Sprachmodell laden (ca. 45 MB).';document.body.classList.remove('listening','demo-active');score=0;remaining=duration;updateStats();preview();status('Dein nächstes Leseabenteuer wartet.','Mikrofon einschalten, ein Wort aussuchen und laut vorlesen.');}
 function tick(now){const dt=Math.min((now-lastTime)/1000,.15);lastTime=now;if(state==='playing'){checkReadingPause(now);if(mode==='timed'){remaining=Math.max(0,remaining-dt);updateStats();if(remaining===0)finish();}if(state==='playing'){targets.forEach(t=>{t.age+=dt;if(!reduced)advanceFlight(t,dt,t.bounds);position(t);});spawnClock+=dt;if(spawnClock>1.2){spawn();spawnClock=0;}targets.filter(t=>t.age>=t.lifetime).forEach(remove);if(!deck.remaining&&!targets.length)finish();}}else if(state==='idle'){previewTime+=dt;targets.forEach(t=>{t.age=previewTime;position(t);});}requestAnimationFrame(tick);}
 $('#start').onclick=()=>start(false);$('#demo').onclick=()=>start(true);$('#pause').onclick=pause;$('#resume').onclick=()=>start(demo,true);$('#finish').onclick=finish;$('#end').onclick=finish;$('#again').onclick=()=>start(demo);$('#home').onclick=home;$('#cancel-load').onclick=home;
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>{if(state!=='idle')return;level=Number(b.dataset.level);document.querySelectorAll('[data-level]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',String(x===b));});showBest();showGrade();preview();});

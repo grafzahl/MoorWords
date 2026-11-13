@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {LocalSpeech} from '../dist/speech.mjs';
-import {ReadingAttempt} from '../dist/reading.mjs';
+import {ReadingAttempt,StablePartialMatcher} from '../dist/reading.mjs';
 function environment(){let stopped=0,closed=0,removed=0,terminated=0;const track={stop(){stopped++;}};const stream={getTracks:()=>[track],getAudioTracks:()=>[track]};const node=()=>({connect(){},disconnect(){}});class Context{sampleRate=48000;resume(){return Promise.resolve();}close(){closed++;return Promise.resolve();}createMediaStreamSource(){return node();}createScriptProcessor(){return node();}createGain(){return {...node(),gain:{value:1}};}}
 class Recognizer{constructor(rate,grammar){assert.equal(rate,48000);this.grammar=grammar;this.listeners={};}setWords(value){assert.equal(value,true);}on(name,cb){this.listeners[name]=cb;}acceptWaveform(){}remove(){removed++;}}
 class Model{constructor(){this.ready=false;this.listeners={};queueMicrotask(()=>{this.ready=true;this.listeners.load?.({result:true});});}on(name,cb){this.listeners[name]=cb;}setLogLevel(){}KaldiRecognizer=Recognizer;terminate(){terminated++;}}
@@ -79,4 +79,39 @@ test('Angeforderte Endergebnisse treffen nur sichere sichtbare Wörter und zähl
     assert.equal(hits,conf===.4?0:1);
   }
   speech.dispose();
+});
+
+test('Ausbleibende Abschlussantwort meldet einen Neustart statt endlos zu warten',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();const speech=new LocalSpeech(),failures=[];
+  await speech.start(()=>{},()=>{},()=>{},message=>failures.push(message));
+  const r=speech.recognizer;r.retrieveFinalResult=()=>{};
+  r.listeners.partialresult({result:{partial:'haus'}});t.mock.timers.tick(2000);
+  t.mock.timers.tick(4999);assert.equal(failures.length,0);
+  t.mock.timers.tick(1);assert.equal(failures.length,1);assert.match(failures[0],/Weiterlesen/);
+  speech.dispose();
+});
+test('Rechtzeitige Antwort und Stop löschen die Überwachung des Abschlusses',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();const speech=new LocalSpeech(),failures=[];
+  await speech.start(()=>{},()=>{},()=>{},message=>failures.push(message));
+  const r=speech.recognizer;r.retrieveFinalResult=()=>{};
+  r.listeners.partialresult({result:{partial:'haus'}});t.mock.timers.tick(2000);
+  r.listeners.result({result:{text:'haus'}});t.mock.timers.tick(6000);
+  assert.deepEqual(failures,[]);
+  r.listeners.partialresult({result:{partial:'maus'}});t.mock.timers.tick(2000);
+  speech.stop();t.mock.timers.tick(6000);assert.deepEqual(failures,[]);speech.dispose();
+});
+
+test('Stabiles Zwischenwort trifft trotz verzögertem Abschluss genau einmal',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});environment();
+  const speech=new LocalSpeech(),matcher=new StablePartialMatcher(),attempt=new ReadingAttempt();
+  const target={id:1,word:{text:'Haus'},hit:false};let now=0,hits=0;
+  const credit=matches=>{for(const word of matches){word.hit=true;hits++;}};
+  await speech.start((text,details)=>{matcher.reset();credit(attempt.final(text,details,[target],now).hits);},text=>credit(matcher.update(text,[target],now)),()=>{},()=>{});
+  const r=speech.recognizer;r.retrieveFinalResult=()=>{};
+  r.listeners.partialresult({result:{partial:'haus'}});
+  now=2000;t.mock.timers.tick(2000);assert.equal(hits,0);
+  // Worker callback arrives after the flush request: still needed for stability.
+  now=2100;r.listeners.partialresult({result:{partial:'haus'}});assert.equal(hits,1);
+  r.listeners.result({result:{text:'haus',result:[{word:'haus',conf:.9}]}});
+  assert.equal(hits,1);speech.dispose();
 });

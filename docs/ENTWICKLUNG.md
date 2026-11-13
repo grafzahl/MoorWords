@@ -10,7 +10,7 @@ Das Repository umfasst:
 - `README.md`, `CHANGELOG.md`, `package.json`, `server.mjs`
 - `Start-MoorWords.ps1`, `Start-MoorWords.cmd`, `.gitignore`
 
-Lokale Git-Metadaten, die nicht verwendete Sites-Konfiguration `.openai/`, Laufzeiten, Sprachmodelle, Downloads und persönliche Dateien gehören nicht in dieses Repository. Änderungen werden vor dem Upload mit passenden Tests und den Syntaxprüfungen aus `package.json` geprüft. Die vollständige Testsuite läuft mit `node --test tests/*.test.mjs`. Der aktuelle Stand ist 0.4.0. Die Erkennungslogik steht in `dist/reading.mjs`; ihre Tests simulieren Erkennungsergebnisse und prüfen keine Audioqualität. Vor einem Einsatz mit Kindern die in der README beschriebenen Mikrofon-Vergleichstests durchführen.
+Lokale Git-Metadaten, die nicht verwendete Sites-Konfiguration `.openai/`, Laufzeiten, Sprachmodelle, Downloads und persönliche Dateien gehören nicht in dieses Repository. Änderungen werden vor dem Upload mit passenden Tests und den Syntaxprüfungen aus `package.json` geprüft. Die vollständige Testsuite läuft mit `node --test tests/*.test.mjs`. Der aktuelle Stand ist 0.4.1. Die Erkennungslogik steht in `dist/reading.mjs`; ihre Tests simulieren Erkennungsergebnisse und prüfen keine Audioqualität. Vor einem Einsatz mit Kindern die in der README beschriebenen Mikrofon-Vergleichstests durchführen.
 
 Für weitere Änderungen das vorhandene Repository verwenden und dessen aktuellen Stand zuerst lesen. Wortpools bleiben nach Klasse 1–4 getrennt; Lernziele und Wortauswahl in `docs/LERNZIELE.md` nachvollziehbar halten. Änderungen an Klassenpools oder Punktewertung müssen den Umgang mit bestehenden Rekorden berücksichtigen.
 
